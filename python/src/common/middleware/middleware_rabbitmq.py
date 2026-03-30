@@ -28,12 +28,12 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
             self._user_callback = on_messaging_callback
             self._channel.basic_consume(
                 queue=self._queue_name, 
-                on_message_callback=self._on_messagin_callback_adapter)
+                on_message_callback=self._on_messaging_callback_adapter)
             self._channel.start_consuming()
         except Exception as e:
             raise MessageMiddlewareMessageError(e)
 
-    def _on_messagin_callback_adapter(self, ch, method, properties, body):
+    def _on_messaging_callback_adapter(self, ch, method, properties, body):
         ack = lambda: ch.basic_ack(delivery_tag=method.delivery_tag)
         nack = lambda: ch.basic_nack(delivery_tag=method.delivery_tag)
         self._user_callback(body, ack, nack)
