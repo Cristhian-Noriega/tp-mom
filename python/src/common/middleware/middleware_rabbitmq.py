@@ -48,4 +48,19 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
 class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
     
     def __init__(self, host, exchange_name, routing_keys):
-        pass
+        # el routing keys que recibo, son los "filtros de interes"
+        # el cliente quiere por ej conectarse al exchange de notificaciones, pero solo quiere
+        # recibir los mensajes cuya routing key este dentro de esa lista 
+        # el exchange entonces hace:
+        # conectar y abrir el canal
+        # declarar el Exchange
+        # declarar una cola exclusiva y temporal para este consumidor, ya que la cola necesita saber a que exchange vincularse
+        # por cada elemento en routing keys, crea un binding para esa cola y el exchange (direct)
+        self._connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+        self._channel = self._connection.channel()
+        self._exchange_name = exchange_name
+        self._exchange = self._channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
+        queue_result = self._channel.queue_declare(exclusive=True)
+        self._queue_name = queue_result.method.name
+        for key in routing_keys:
+            self._channel.queue_bind(queue=self._queue_name, exchange=exchange_name, routing_key=key)
