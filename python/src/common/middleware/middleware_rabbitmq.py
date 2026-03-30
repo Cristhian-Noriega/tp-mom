@@ -60,7 +60,40 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         self._channel = self._connection.channel()
         self._exchange_name = exchange_name
         self._exchange = self._channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
-        queue_result = self._channel.queue_declare(exclusive=True)
-        self._queue_name = queue_result.method.name
+        queue_result = self._channel.queue_declare(queue='',exclusive=True)
+        self._queue_name = queue_result.method.queue
         for key in routing_keys:
             self._channel.queue_bind(queue=self._queue_name, exchange=exchange_name, routing_key=key)
+        self._routing_keys = routing_keys
+
+    
+    def send(self, message):
+        # como productor, quiero mandar a UNA sola ruta  (1-1)
+        # luego los consumidores pueden consumir MAS de una ruta (1-N), pero no es el caso de send porque solo sirve para el consumer
+        self._channel.basic_publish(exchange=self._exchange_name, routing_key=self._routing_keys[0], body=message)
+
+
+    def close(self):
+        try:
+            self._channel.close()
+            self._connection.close()
+        except Exception as e:
+            raise MessageMiddlewareCloseError(e)
+
+    def start_consuming(self, on_messaging_callback):
+        try:
+            self._user_callback = on_messaging_callback
+            self._channel.basic_consume(
+                queue=self._queue_name, 
+                on_message_callback=self._on_messaging_callback_adapter)
+            self._channel.start_consuming()
+        except Exception as e:
+            raise MessageMiddlewareMessageError(e)
+
+    def _on_messaging_callback_adapter(self, ch, method, properties, body):
+        ack = lambda: ch.basic_ack(delivery_tag=method.delivery_tag)
+        nack = lambda: ch.basic_nack(delivery_tag=method.delivery_tag)
+        self._user_callback(body, ack, nack)
+
+    def stop_consuming(self):
+        self._channel.stop_consuming()
