@@ -60,14 +60,17 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         self._channel = self._connection.channel()
         self._exchange_name = exchange_name
         self._exchange = self._channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
-        queue_result = self._channel.queue_declare(queue='',exclusive=True)
-        self._queue_name = queue_result.method.queue
-        for key in routing_keys:
-            self._channel.queue_bind(queue=self._queue_name, exchange=exchange_name, routing_key=key)
+        # queue_result = self._channel.queue_declare(queue='',exclusive=True)
+        # self._queue_name = queue_result.method.queue
+        # for key in routing_keys:
+        #     self._channel.queue_bind(queue=self._queue_name, exchange=exchange_name, routing_key=key)
         self._routing_keys = routing_keys
+        self._queue_name = None
 
     
     def send(self, message):
+        if not self._routing_keys:
+            raise MessageMiddlewareMessageError("No routing keys provided")
         # como productor, quiero mandar a UNA sola ruta  (1-1)
         # luego los consumidores pueden consumir MAS de una ruta (1-N), pero no es el caso de send porque solo sirve para el consumer
         self._channel.basic_publish(exchange=self._exchange_name, routing_key=self._routing_keys[0], body=message)
@@ -81,6 +84,7 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
             raise MessageMiddlewareCloseError(e)
 
     def start_consuming(self, on_messaging_callback):
+        self._init_queue()
         try:
             self._user_callback = on_messaging_callback
             self._channel.basic_consume(
@@ -97,3 +101,12 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
 
     def stop_consuming(self):
         self._channel.stop_consuming()
+
+    def _init_queue(self):
+        if self._queue_name: 
+            return
+
+        queue_result = self._channel.queue_declare(queue='',exclusive=True)
+        self._queue_name = queue_result.method.queue
+        for key in self._routing_keys:
+            self._channel.queue_bind(queue=self._queue_name, exchange=self._exchange_name, routing_key=key)
