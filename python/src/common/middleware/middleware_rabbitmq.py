@@ -1,8 +1,18 @@
 import pika
-import random
-import string
-from .middleware import MessageMiddlewareQueue, MessageMiddlewareExchange, MessageMiddlewareCloseError, MessageMiddlewareMessageError
 import socket
+from .middleware import (
+    MessageMiddlewareQueue, 
+    MessageMiddlewareExchange, 
+    MessageMiddlewareCloseError, 
+    MessageMiddlewareMessageError,
+    MessageMiddlewareDisconnectedError
+)
+
+_CONNECTION_ERRORS = (
+    pika.exceptions.AMQPConnectionError,
+    pika.exceptions.AMQPChannelError,
+    pika.exceptions.StreamLostError
+)
 
 class _RabbitMQBase:
     def __init__(self, host):
@@ -24,12 +34,17 @@ class _RabbitMQBase:
                 queue=self._queue_name, 
                 on_message_callback=self._on_messaging_callback_adapter)
             self._channel.start_consuming()
+        except _CONNECTION_ERRORS as e:
+            raise MessageMiddlewareDisconnectedError(e)
         except Exception as e:
             raise MessageMiddlewareMessageError(e)
 
     def stop_consuming(self):
-        if self._channel:
-            self._channel.stop_consuming()
+        try:
+            if self._channel:
+                self._channel.stop_consuming()
+        except _CONNECTION_ERRORS as e:
+            raise MessageMiddlewareDisconnectedError(e)
 
     def close(self):
         try:
@@ -48,7 +63,12 @@ class MessageMiddlewareQueueRabbitMQ(_RabbitMQBase, MessageMiddlewareQueue):
         self._channel.queue_declare(queue=queue_name)
 
     def send(self, message):
-        self._channel.basic_publish(exchange="", routing_key=self._queue_name, body=message)
+        try:
+            self._channel.basic_publish(exchange="", routing_key=self._queue_name, body=message)
+        except _CONNECTION_ERRORS as e:
+            raise MessageMiddlewareDisconnectedError(e)
+        except Exception as e:
+            raise MessageMiddlewareMessageError(e)
 
 
 
@@ -65,7 +85,13 @@ class MessageMiddlewareExchangeRabbitMQ(_RabbitMQBase, MessageMiddlewareExchange
     def send(self, message):
         if not self._routing_keys:
             raise MessageMiddlewareMessageError("No routing keys provided")
-        self._channel.basic_publish(exchange=self._exchange_name, routing_key=self._routing_keys[0], body=message)
+        
+        try:
+            self._channel.basic_publish(exchange=self._exchange_name, routing_key=self._routing_keys[0], body=message)
+        except _CONNECTION_ERRORS as e:
+            raise MessageMiddlewareDisconnectedError(e)
+        except Exception as e:
+            raise MessageMiddlewareMessageError(e)
 
 
     def start_consuming(self, on_messaging_callback):
