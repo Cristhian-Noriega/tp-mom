@@ -30,6 +30,7 @@ class _RabbitMQBase:
     def start_consuming(self, on_messaging_callback):
         try:
             self._user_callback = on_messaging_callback
+            self._channel.basic_qos(prefetch_count=1)
             self._channel.basic_consume(
                 queue=self._queue_name, 
                 on_message_callback=self._on_messaging_callback_adapter)
