@@ -48,12 +48,17 @@ class _RabbitMQBase:
             raise MessageMiddlewareDisconnectedError(e)
 
     def close(self):
-        try:
-            if self._channel: self._channel.close()
-            if self._connection: self._connection.close()
-        except Exception as e:
-            raise MessageMiddlewareCloseError(e)
-    
+        errors = []
+        for resource in (self._channel, self._connection):
+            try:
+                if resource and resource.is_open:
+                    resource.close()
+            except Exception as e:
+                errors.append(e)
+
+        if errors:
+            raise MessageMiddlewareCloseError(errors[0])
+
 
 
 class MessageMiddlewareQueueRabbitMQ(_RabbitMQBase, MessageMiddlewareQueue):
@@ -88,7 +93,12 @@ class MessageMiddlewareExchangeRabbitMQ(_RabbitMQBase, MessageMiddlewareExchange
             raise MessageMiddlewareMessageError("No routing keys provided")
         
         try:
-            self._channel.basic_publish(exchange=self._exchange_name, routing_key=self._routing_keys[0], body=message)
+            for key in self._routing_keys:
+                self._channel.basic_publish(
+                    exchange=self._exchange_name,
+                    routing_key=key,
+                    body=message,
+                )
         except _CONNECTION_ERRORS as e:
             raise MessageMiddlewareDisconnectedError(e)
         except Exception as e:
