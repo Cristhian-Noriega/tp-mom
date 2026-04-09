@@ -21,9 +21,16 @@ class _RabbitMQBase:
         self._user_callback = None
         self._queue_name = None
 
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
     def _on_messaging_callback_adapter(self, ch, method, properties, body):
-        ack = lambda: ch.basic_ack(delivery_tag=method.delivery_tag)
-        nack = lambda: ch.basic_nack(delivery_tag=method.delivery_tag)
+        ack = lambda: ch.is_open and ch.basic_ack(delivery_tag=method.delivery_tag)
+        nack = lambda: ch.is_open and ch.basic_nack(delivery_tag=method.delivery_tag)
         self._user_callback(body, ack, nack)
 
     
