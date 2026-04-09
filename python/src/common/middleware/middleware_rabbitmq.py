@@ -73,7 +73,7 @@ class MessageMiddlewareQueueRabbitMQ(_RabbitMQBase, MessageMiddlewareQueue):
     def __init__(self, host, queue_name):
         super().__init__(host)
         self._queue_name = queue_name
-        self._channel.queue_declare(queue=queue_name)
+        self._channel.queue_declare(queue=queue_name, durable=True)
 
     def send(self, message):
         try:
@@ -91,7 +91,11 @@ class MessageMiddlewareExchangeRabbitMQ(_RabbitMQBase, MessageMiddlewareExchange
     def __init__(self, host, exchange_name, routing_keys):
         super().__init__(host)
         self._exchange_name = exchange_name
-        self._exchange = self._channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
+        self._exchange = self._channel.exchange_declare(
+            exchange=exchange_name,
+            exchange_type='direct',
+            durable=True,
+        )
         self._routing_keys = routing_keys
 
     
